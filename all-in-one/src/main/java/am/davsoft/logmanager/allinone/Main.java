@@ -1,4 +1,4 @@
-package am.davsoft.logmanager.sniffer;
+package am.davsoft.logmanager.allinone;
 
 import sun.misc.Signal;
 
@@ -8,14 +8,16 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * @author David Shahbazyan
- * @since Apr 08, 2019
+ * @since Apr 09, 2019
  */
-public class Sniffer {
+public class Main {
     private static boolean TERMINATE = false;
 
     private static final String URL_REGEX = "(https?|ftp|file)://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]";
@@ -32,9 +34,11 @@ public class Sniffer {
             "[      ]"
     };
 
+    private static final Map<String, Long> hitsMap = new HashMap<>();
+    private static int i = 0;
+
     public static void main(String[] args) {
-        System.out.print("\033[H\033[2J");
-        System.out.flush();
+        clearConsole();
         if (args.length != 1) {
             System.err.println(" Error: Please specify the log file path.");
             System.exit(1);
@@ -50,21 +54,23 @@ public class Sniffer {
                 System.out.println("Shutting down...");
                 TERMINATE = true;
             });
-            int i = 0;
             String line;
             while (!TERMINATE) {
                 line = lineReader.readLine();
                 if (line != null) {
                     processLine(line);
+                    rerenderScreen();
+                    System.out.println();
                 }
+                System.out.print("\r Processing... " + loadingChars[i++]);
                 if (i == loadingChars.length) {
                     i = 0;
                 }
-                System.out.print("\r Press <Ctrl+C> for termination." + loadingChars[i++]);
+                Thread.sleep(100);
             }
             lineReader.close();
             reader.close();
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
@@ -74,9 +80,23 @@ public class Sniffer {
         Matcher matcher = pattern.matcher(line);
         if (matcher.find()) {
             String url = matcher.group(0);
-            Socket socket = new Socket("localhost", 59090);
-            PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-            writer.println(url);
+            hitsMap.put(url, hitsMap.computeIfAbsent(url, s -> 0L) + 1);
+//            Socket socket = new Socket("localhost", 59090);
+//            PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+//            writer.println(url);
         }
+    }
+
+    private static void rerenderScreen() {
+        clearConsole();
+        System.out.println("The Monitor is running...\nPress <Ctrl+C> for termination.\n");
+        for (Map.Entry<String, Long> entry : hitsMap.entrySet()) {
+            System.out.println(String.format(" [%5d] : %s", entry.getValue(), entry.getKey()));
+        }
+    }
+
+    private static void clearConsole() {
+        System.out.print("\033[H\033[2J");
+        System.out.flush();
     }
 }
